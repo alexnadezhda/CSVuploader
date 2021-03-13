@@ -5,11 +5,13 @@
  *
  * @package Really Simple CSV Importer
  */
+
 class RSCSV_Import_Post_Helper
 {
     const CFS_PREFIX = 'cfs_';
     const SCF_PREFIX = 'scf_';
-    
+    private static $attach_ids = "";
+    private static $thumbnail_path;
     /**
      * @var $post WP_Post object
      */
@@ -106,27 +108,20 @@ class RSCSV_Import_Post_Helper
      */
     public static function add($data)
     {
+        self::$attach_ids = '';
         $object = new RSCSV_Import_Post_Helper();
-        
-        // if ($data['post_type'] == 'attachment') {
-            $post_id = $object->addMediaFile($data['media_file'], $data);
-            kses_remove_filters();
-            $data['post_type'] = 'product';
-            $post_id = wp_insert_post($data);
-            kses_init_filters();
-            $product = wc_get_product($post_id);
-            $product->set_sku( $sku );
-            $product->save();
-        // } else {
-        //     kses_remove_filters();
-        //     $data['post_type'] = 'product';
-        //     $post_id = wp_insert_post($data);
-        //     kses_init_filters();
-        //     $product = wc_get_product($post_id);
-        //     $product->set_sku( $sku );
-        //     $product->save();
-            
-        // }
+
+        $attachs = $object->addMediaFile($data['media_file'], $data);
+        kses_remove_filters();
+        $data['post_type'] = 'product';
+        $post_id = wp_insert_post($data);
+        $meta_id = set_post_thumbnail($post_id, $attachs);
+        update_post_meta( $post_id, '_product_image_gallery', self::$attach_ids );
+        kses_init_filters();
+        $product = wc_get_product($post_id);
+        $product->set_sku( $sku );
+        $product->save();
+
         if (is_wp_error($post_id)) {
             $object->addError($post_id->get_error_code(), $post_id->get_error_message());
         } else {
@@ -318,15 +313,23 @@ class RSCSV_Import_Post_Helper
      */
     public function addMediaFile($file, $data = null)
     {
-        if (parse_url($file, PHP_URL_SCHEME)) {
-            $file = $this->remoteGet($file);
+        if (parse_url($data['media_file'], PHP_URL_SCHEME)) {
+            $files = $this->remoteGet($data['media_file']);
         }
-        $id = $this->setAttachment($file, $data);
-        if ($id) {
-            return $id;
+        // $this->addThumbnail($files[0]);
+        foreach($files as $key => $file){
+
+            
+            $id = $this->setAttachment($file, $data);
+            if($key == 0){
+                $temp = $id;
+            }
+            
+            self::$attach_ids .= $id . ',';
         }
+        return $temp;
         
-        return false;
+        // return false;
     }
     
     /**
@@ -339,9 +342,10 @@ class RSCSV_Import_Post_Helper
     {
         $post = $this->getPost();
         if ($post instanceof WP_Post) {
-            if (parse_url($file, PHP_URL_SCHEME)) {
-                $file = $this->remoteGet($file);
-            }
+            // if (parse_url($file, PHP_URL_SCHEME)) {
+            //     $file = $this->remoteGet($file);
+            // }
+            print_r("This is the path of thumb");
             $thumbnail_id = $this->setAttachment($file);
             if ($thumbnail_id) {
                 $meta_id = set_post_thumbnail($post, $thumbnail_id);
@@ -361,34 +365,34 @@ class RSCSV_Import_Post_Helper
      * @param (array) $data
      * @return (int) Return the attachment id on success, 0 on failure.
      */
-    public function setAttachment($files, $data = array())
+    public function setAttachment($file, $data = array())
     {
+
         $post = $this->getPost();
-        foreach ($files as $key => $file) {
-            if ( $file && file_exists($file) ) {
-                $filename       = basename($file);
-                $wp_filetype    = wp_check_filetype_and_ext($file, $filename);
-                $ext            = empty( $wp_filetype['ext'] ) ? '' : $wp_filetype['ext'];
-                $type           = empty( $wp_filetype['type'] ) ? '' : $wp_filetype['type'];
-                $proper_filename= empty( $wp_filetype['proper_filename'] ) ? '' : $wp_filetype['proper_filename'];
-                $filename       = ($proper_filename) ? $proper_filename : $filename;
-                $filename       = sanitize_file_name($filename);
-    
-                $upload_dir     = wp_upload_dir();
-                $guid           = $upload_dir['baseurl'] . '/' . _wp_relative_upload_path($file);
-                
-                $attachment = array_merge(array(
-                    'post_mime_type'    => $type,
-                    'guid'              => $guid,
-                    'post_title'        => $filename,
-                    'post_content'      => '',
-                    'post_status'       => 'inherit'
-                ), $data);
-                $attachment_id          = wp_insert_attachment($attachment, $file, ($post instanceof WP_Post) ? $post->ID : null);
-                $attachment_metadata    = wp_generate_attachment_metadata( $attachment_id, $file );
-                wp_update_attachment_metadata($attachment_id, $attachment_metadata);
-                return $attachment_id;
-            }
+        if ( $file && file_exists($file) ) {
+            $filename       = basename($file);
+            $wp_filetype    = wp_check_filetype_and_ext($file, $filename);
+            $ext            = empty( $wp_filetype['ext'] ) ? '' : $wp_filetype['ext'];
+            $type           = empty( $wp_filetype['type'] ) ? '' : $wp_filetype['type'];
+            $proper_filename= empty( $wp_filetype['proper_filename'] ) ? '' : $wp_filetype['proper_filename'];
+            $filename       = ($proper_filename) ? $proper_filename : $filename;
+            $filename       = sanitize_file_name($filename);
+
+            $upload_dir     = wp_upload_dir();
+            $guid           = $upload_dir['baseurl'] . '/' . _wp_relative_upload_path($file);
+            
+            $attachment = array_merge(array(
+                'post_mime_type'    => $type,
+                'guid'              => $guid,
+                'post_title'        => $filename,
+                'post_content'      => '',
+                'post_status'       => 'inherit'
+            ), $data);
+            $attachment_id          = wp_insert_attachment($attachment, $file, ($post instanceof WP_Post) ? $post->ID : null);
+            
+            $attachment_metadata    = wp_generate_attachment_metadata( $attachment_id, $file );
+            wp_update_attachment_metadata($attachment_id, $attachment_metadata);
+            return $attachment_id;
         }
         // On failure
         return 0;
@@ -418,6 +422,7 @@ class RSCSV_Import_Post_Helper
      */
     public function remoteGet($url, $args = array())
     {
+
         $delete = "no"; // if you DO NOT want the .zip file to be deleted after it was extracted set "yes" to "no".
         /* don't touch nothing after this line */
         $file = "file.zip";
@@ -441,6 +446,7 @@ class RSCSV_Import_Post_Helper
 
             $files = scandir($filepath);
             $files = array_diff(scandir($filepath), array('.', '..')); 
+            
             $data = array();
             foreach ($files as $key => $file) {
                 array_push($data, $filepath . '/' . $file);

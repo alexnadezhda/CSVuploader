@@ -115,7 +115,6 @@ class RS_CSV_Importer extends WP_Importer {
 	* @return RSCSV_Import_Post_Helper
 	*/
 	public function save_post($post,$meta,$terms,$thumbnail,$is_update) {
-		
 		// Separate the post tags from $post array
 		if (isset($post['post_tags']) && !empty($post['post_tags'])) {
 			$post_tags = $post['post_tags'];
@@ -127,7 +126,7 @@ class RS_CSV_Importer extends WP_Importer {
 		// 	$post['media_file'] = $thumbnail;
 		// 	$thumbnail = null;
 		// }
-		if (!empty($thumbnail) && $post['post_type'] == 'attachment') {
+		if (!empty($thumbnail)) {
 			$post['media_file'] = $thumbnail;
 			$thumbnail = null;
 		}
@@ -154,9 +153,9 @@ class RS_CSV_Importer extends WP_Importer {
 		}
 		
 		// Add thumbnail
-		if ($thumbnail) {
-			$h->addThumbnail($thumbnail);
-		}
+		// if ($thumbnail) {
+		// 	$h->addThumbnail($thumbnail);
+		// }
 		
 		return $h;
 	}
@@ -188,17 +187,6 @@ class RS_CSV_Importer extends WP_Importer {
 				$is_update = false;
 				$error = new WP_Error();
 				
-				// (string) (required) post type
-				$post_type = $h->get_data($this,$data,'post_type');
-				if ($post_type) {
-					if (post_type_exists($post_type)) {
-						$post['post_type'] = $post_type;
-					} else {						
-						$error->add( 'post_type_exists', sprintf(__('Invalid post type "%s".', 'really-simple-csv-importer'), $post_type) );
-					}			
-				} else {
-					echo __('Note: Please include post_type value if that is possible.', 'really-simple-csv-importer').'<br>';
-				}
 				$post['post_type'] = "product";
 				
 				// (int) post id
@@ -237,6 +225,12 @@ class RS_CSV_Importer extends WP_Importer {
 
 					$post['post_title'] = $post_title;
 				}
+				$post_sub = $h->get_data($this,$data,'brandName');
+				if ($post_sub) {
+
+					$post['post_title'] = ucfirst($post_sub) . ' ' .  $post['post_title'];
+				}
+
 
 				// (string) post slug
 				$post_name = $h->get_data($this,$data,'post_name');
@@ -292,12 +286,6 @@ class RS_CSV_Importer extends WP_Importer {
     				$post['post_password'] = $post_password;
 				}
 
-				// (string) post content
-				// $post_content = $h->get_data($this,$data,'post_content');
-				// if ($post_content) {
-				// 	$post['post_content'] = $post_content;
-				// }
-				
 				// (string) post excerpt
 				$post_excerpt = $h->get_data($this,$data,'post_excerpt');
 				if ($post_excerpt) {
@@ -339,9 +327,7 @@ class RS_CSV_Importer extends WP_Importer {
 				
 				// (string) post thumbnail image uri
 				$post_thumbnail = $h->get_data($this,$data,'partImage');
-				
-				// $post_image = $h->get_data($this, $data, 'partImage');
-				
+
 				$meta = array();
 				$tax = array();
 				$post_content = '';
@@ -353,6 +339,16 @@ class RS_CSV_Importer extends WP_Importer {
 								$post_content = $post_content . '<!-- wp:paragraph --><p><ul><li>' . $value . '</p><!-- /wp:paragraph -->';
 							}
 						} 
+						if($this->column_keys[$key]==="specialInstructions"){
+							if ($value) {
+								$post_instructions = '<!-- wp:paragraph --><p><ul><li>' . $value . '</p><!-- /wp:paragraph -->';
+							}
+						}
+						if($this->column_keys[$key]==="supplierNumber"){
+							if ($value) {
+								$post_number ='<!-- wp:paragraph --><p><ul><li>' . $value . '</p><!-- /wp:paragraph -->';
+							}
+						}
 						
 						if($this->column_keys[$key]==="punctuatedPartNumber"){
 							$temp = "";
@@ -361,7 +357,7 @@ class RS_CSV_Importer extends WP_Importer {
 									$temp = $temp . substr($value, $i, 1);
 								}
 							}
-							$meta["SKU"] = $temp;
+							$meta["_sku"] = $temp;
 						}
 						if($this->column_keys[$key]==="brandName"){
 							$meta["Brand"] = $value;
@@ -376,7 +372,7 @@ class RS_CSV_Importer extends WP_Importer {
 					}
 				}   //// KMS
 				if($post_content){
-					$post['post_content'] = $post_content;
+					$post['post_content'] = $post_content . $post_instructions . $post_number;
 				}
 					
 				$content = apply_filters('the_content', $post->post_content);
